@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>歌词幻境</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <style>
+      body {
+        font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      }
+    </style>
+  </head>
+  <body class="bg-black">
+    <div id="root"></div>
+
+    <script>
+      const { createElement: h, useEffect, useMemo, useRef, useState } = React;
+
+      // 私有图库：用于背景图随机抽取（静态直链，无需任何搜图 API）
+      const IMAGE_LIBRARY = [
+        "https://images.unsplash.com/photo-1578301978693-85fa9c0320b9?q=80&w=2000",
+        "https://images.unsplash.com/photo-1616467367807-6a1617bd2a07?q=80&w=2000",
+        "https://images.unsplash.com/photo-1582201943021-e8eeb01f16f5?q=80&w=2000",
+        "https://images.unsplash.com/photo-1596708020922-b5b8888e5d6d?q=80&w=2000",
+        "https://images.unsplash.com/photo-1549497538-303791108f94?q=80&w=2000",
+        "https://images.unsplash.com/photo-1533602120306-03c004c2311f?q=80&w=2000",
+        "https://images.unsplash.com/photo-1511216113906-8f57bb83e776?q=80&w=2000",
+        "https://images.unsplash.com/photo-1506197603052-3cc9c3a201bd?q=80&w=2000",
+        "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=2000",
+        "https://images.unsplash.com/photo-1581012771221-82637a284242?q=80&w=2000",
+        "https://images.unsplash.com/photo-1501785888041-af3ef285b470?q=80&w=2000",
+        "https://images.unsplash.com/photo-1583095117180-6b6f70a59a72?q=80&w=2000",
+        "https://images.unsplash.com/photo-1507608158173-1dcec673a2e5?q=80&w=2000",
+        "https://images.unsplash.com/photo-1563089145-599997674d42?q=80&w=2000",
+        "https://images.unsplash.com/photo-1618005198919-d3d4b5a92ead?q=80&w=2000",
+        "https://images.unsplash.com/photo-1558591710-4b4a1ae0f04d?q=80&w=2000",
+        "https://images.unsplash.com/photo-1500462918059-b1a0cb512f1d?q=80&w=2000",
+        "https://images.unsplash.com/photo-1510784722466-f2aa9c52ffe6?q=80&w=2000",
+        "https://images.unsplash.com/photo-1587654133418-9c16afac0882?q=80&w=2000",
+        "https://images.unsplash.com/photo-1596708020922-b5b8888e5d6d?q=80&w=2000",
+      ];
+      const INITIAL_BG = IMAGE_LIBRARY[0];
+      const FALLBACK_BG = IMAGE_LIBRARY[0];
+
+      function App() {
+        const [lyric, setLyric] = useState("");
+        const [frontBg, setFrontBg] = useState(INITIAL_BG);
+        const [backBg, setBackBg] = useState(IMAGE_LIBRARY[1] || INITIAL_BG);
+        const [frontVisible, setFrontVisible] = useState(true);
+        const [submittedLyric, setSubmittedLyric] = useState("");
+        const [isGenerating, setIsGenerating] = useState(false);
+        const timerRef = useRef(null);
+        const lastIndexRef = useRef(0);
+
+        const helperText = useMemo(function () {
+          if (isGenerating) return "幻境正在生成中...";
+          if (!submittedLyric) return "按回车，让歌词化成一幅梦。";
+          return "“" + submittedLyric + "”";
+        }, [isGenerating, submittedLyric]);
+
+        useEffect(function () {
+          const initialImage = new Image();
+          initialImage.onerror = function () {
+            setFrontBg(FALLBACK_BG);
+            setFrontVisible(true);
+          };
+          initialImage.src = INITIAL_BG;
+
+          return function () {
+            if (timerRef.current) {
+              clearTimeout(timerRef.current);
+            }
+          };
+        }, []);
+
+        function crossfadeTo(url) {
+          // 使用双层背景 + opacity 过渡，实现真正的淡入淡出（1.5s）
+          if (frontVisible) {
+            setBackBg(url);
+            setFrontVisible(false);
+          } else {
+            setFrontBg(url);
+            setFrontVisible(true);
+          }
+        }
+
+        function applyBackgroundWithFallback(targetUrl) {
+          const imageProbe = new Image();
+          imageProbe.onload = function () {
+            crossfadeTo(targetUrl);
+          };
+          imageProbe.onerror = function () {
+            crossfadeTo(FALLBACK_BG);
+          };
+          imageProbe.src = targetUrl;
+        }
+
+        function handleSubmit(e) {
+          e.preventDefault();
+          const trimmed = lyric.trim();
+          if (!trimmed) return;
+
+          setSubmittedLyric(trimmed);
+          setIsGenerating(true);
+
+          if (timerRef.current) {
+            clearTimeout(timerRef.current);
+          }
+          timerRef.current = setTimeout(function () {
+            var nextIndex = Math.floor(Math.random() * IMAGE_LIBRARY.length);
+            var tries = 0;
+            // 尽量避免与上一张背景连续重复（多次抽取上限防止极端情况下卡顿）
+            while (
+              IMAGE_LIBRARY.length > 1 &&
+              nextIndex === lastIndexRef.current &&
+              tries < 6
+            ) {
+              nextIndex = Math.floor(Math.random() * IMAGE_LIBRARY.length);
+              tries += 1;
+            }
+            lastIndexRef.current = nextIndex;
+
+            const nextUrl = IMAGE_LIBRARY[nextIndex];
+            applyBackgroundWithFallback(nextUrl);
+            setIsGenerating(false);
+          }, 3000);
+        }
+
+        return h(
+          "main",
+          { className: "relative min-h-screen overflow-hidden text-white" },
+          h("div", {
+            className:
+              "absolute inset-0 scale-105 bg-cover bg-center transition-opacity duration-[1500ms] ease-in-out " +
+              (frontVisible ? "opacity-100" : "opacity-0"),
+            style: { backgroundImage: "url(" + frontBg + ")" },
+          }),
+          h("div", {
+            className:
+              "absolute inset-0 scale-105 bg-cover bg-center transition-opacity duration-[1500ms] ease-in-out " +
+              (!frontVisible ? "opacity-100" : "opacity-0"),
+            style: { backgroundImage: "url(" + backBg + ")" },
+          }),
+          h("div", {
+            className:
+              "absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,230,160,0.18),transparent_38%),radial-gradient(circle_at_80%_30%,rgba(120,170,255,0.16),transparent_40%)] animate-[floatGlow_9s_ease-in-out_infinite]",
+          }),
+          h("div", {
+            className: "absolute inset-0 bg-gradient-to-b from-black/45 via-black/35 to-black/55",
+          }),
+          h("div", { className: "absolute inset-0 backdrop-blur-[1px]" }),
+          h(
+            "section",
+            { className: "relative z-10 flex min-h-screen items-center justify-center px-6" },
+            h(
+              "div",
+              { className: "w-full max-w-2xl text-center" },
+              h(
+                "h1",
+                { className: "mb-3 text-3xl font-light tracking-[0.18em] md:text-5xl" },
+                "歌词幻境"
+              ),
+              h("p", { className: "mb-8 text-sm text-white/80 md:text-base" }, helperText),
+              h(
+                "form",
+                { onSubmit: handleSubmit },
+                h(
+                  "div",
+                  {
+                    className:
+                      "rounded-2xl border border-white/40 bg-white/10 p-2 backdrop-blur-md shadow-[0_0_40px_rgba(255,255,255,0.08)]",
+                  },
+                  h("input", {
+                    value: lyric,
+                    onChange: function (e) {
+                      setLyric(e.target.value);
+                    },
+                    className:
+                      "w-full rounded-xl bg-transparent px-5 py-4 text-center text-base text-white placeholder:text-white/65 outline-none md:text-lg",
+                    placeholder: "输入那句击中你的歌词",
+                    disabled: isGenerating,
+                  })
+                )
+              ),
+              isGenerating
+                ? h(
+                    "p",
+                    {
+                      className:
+                        "mt-4 text-xs tracking-[0.22em] text-amber-100/85 animate-pulse md:text-sm",
+                    },
+                    "正在把歌词酿成一幅画..."
+                  )
+                : null
+            )
+          )
+        );
+      }
+
+      const style = document.createElement("style");
+      style.textContent =
+        "@keyframes fadeIn{from{opacity:0;transform:scale(1.08)}to{opacity:1;transform:scale(1.05)}}@keyframes floatGlow{0%,100%{opacity:.75;transform:scale(1)}50%{opacity:1;transform:scale(1.06)}}";
+      document.head.appendChild(style);
+
+      ReactDOM.createRoot(document.getElementById("root")).render(h(App));
+    </script>
+  </body>
+</html>
